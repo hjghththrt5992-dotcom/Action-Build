@@ -20,3 +20,16 @@ jobs:
           CLIENT_PUBLIC_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFGT6B93bLiiwr6RpqdxkZCQnqTCWh28edqsPD7rHI0z root@ff"
           TASK_SERVER_HOST_KEY: "[32.236.231.108]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEfobji4EhqACkks/y5Luj53yp1ofCVm7+m0UMRvEzND"
         run: python3 .ci/lumen-kvm-host-ci3.py
+      - name: Preserve dependency bootstrap diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lumen-ci3-bootstrap-${{ github.run_id }}
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 7
+          path: |
+            ~/.lumen-kvm-host-ci3/bootstrap/host-dependencies.json
+            ~/.lumen-kvm-host-ci3/bootstrap/apt-*.log
+            ~/.lumen-kvm-host-ci3/bootstrap/dpkg-verify.log
+            ~/.lumen-kvm-host-ci3/emulator-dependencies.json
