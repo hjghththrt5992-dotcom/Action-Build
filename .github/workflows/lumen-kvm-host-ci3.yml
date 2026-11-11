@@ -33,3 +33,4 @@ jobs:
             ~/.lumen-kvm-host-ci3/bootstrap/apt-*.log
             ~/.lumen-kvm-host-ci3/bootstrap/dpkg-verify.log
             ~/.lumen-kvm-host-ci3/emulator-dependencies.json
+            ~/.lumen-kvm-host-ci3/ssh-bootstrap.json
