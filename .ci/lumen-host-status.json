@@ -1,0 +1,15 @@
+{
+  "status": "awaiting_restricted_forward_key",
+  "run_id": "43031340981",
+  "updated": 1794404471.9801674,
+  "expires": 1794409866.752047,
+  "runner_user": "runner",
+  "reverse_port": 49732,
+  "sshd_port": 22222,
+  "stop_file": "/home/runner/.lumen-kvm-host/stop",
+  "runner_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICsFpZiN3aE3dtdcV3lVDoqqmbf6Anz0S5Rcc8QHYyiC runner@runnervm7aw5e",
+  "host_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEP1mBhrP9T5RM7Y84JFyHxljgKyu6h9jzp/OnEdS9f5 runner@runnervm7aw5e",
+  "kvm_present": true,
+  "cpu_count": 4,
+  "meminfo": "MemTotal:       16366512 kB\nMemFree:        14327288 kB\nMemAvailable:   15243232 kB\nBuffers:           56276 kB\nCached:          1150964 kB\nSwapCached:            0 kB\nActive:           723340 kB\nInactive:         756984 kB\nActive(anon):     325760 kB\nInactive(anon):        0 kB\nActive(file):     397580 kB\nInactive(file):   756984 kB\nUnevictable:       46728 kB\nMlocked:           43656 kB\nSwapTotal:       3145724 kB\nSwapFree:        3145724 kB\nZswap:                 0 kB\nZswapped:              0 kB\nDirty:            422908 kB\nWriteback:             0 kB\nAnonPages:        319928 kB\nMapped:           352944 kB\nShmem:             43932 kB\nKReclaimable:      45428 kB\nSlab:             119964 kB\nSReclaimable:      45428 kB\nSUnreclaim:        74536 kB\nKernelStack:        4480 kB\nPageTables:         7084 kB\nSecPageTables:         0 kB\nNFS_Unstable:          0 kB\nBounce:                0 kB\nWritebackTmp:          0 kB\nCommitLimit:    11328980 kB\nCommitted_AS:    2285836 kB\nVmallocTotal:   13743895347199 kB\nVmallocUsed:       39304 kB\nVmallocChunk:          0 kB\nPercpu:             2352 kB\nHardwareCorrupted:     0 kB\nAnonHugePages:         0 kB\nShmemHugePages:        0 kB\nShmemPmdMapped:        0 kB\nFileHugePages:     67584 kB\nFilePmdMapped:         0 kB\nCmaTotal:              0 kB\nCmaFree:         1460224 kB\nUnaccepted:            0 kB\nBalloon:               0 kB\nGPUActive:             0 kB\nGPUReclaim:            0 kB\nHugePages_Total:       0\nHugePages_Free:        0\nHugePages_Rsvd:        0\nHugePages_Surp:        0\nHugepagesize:       2048 kB\nHugetlb:               0 kB\nDirectMap4k:      117888 kB\nDirectMap2M:     4071424 kB\nDirectMap1G:    14680064 kB\n"
+}
