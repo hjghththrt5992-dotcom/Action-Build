@@ -113,6 +113,17 @@ def install_host_dependencies(root,deadline=450,attempts=3):
                 row['returncode']=124
         row['sha256']=hashlib.sha256(log.read_bytes()).hexdigest()
         persist()
+        print(json.dumps(dict(event='host_dependency_command',label=label,
+            status='passed' if row['returncode']==0 else 'failed',
+            returncode=row['returncode'])),flush=True)
+        if row['returncode']:
+            # APT uses only the public official sources above. Never print
+            # environment values, authentication keys or SSH/tunnel logs.
+            with log.open('rb') as stream:
+                stream.seek(max(0,log.stat().st_size-8192))
+                tail=stream.read(8192).decode('utf-8',errors='replace')
+            print(json.dumps(dict(event='host_dependency_log_tail',label=label,
+                                  limit_bytes=8192,output=tail)),flush=True)
         if row['returncode'] in (124,137):
             # An interrupted installation is never retried automatically.
             raise TimeoutError('Owned host dependency command timed out: '+label)
@@ -135,6 +146,8 @@ def install_host_dependencies(root,deadline=450,attempts=3):
                     raise RuntimeError('Host dependency package remains uninstalled')
                 receipt.update(passed=True,completed=time.time(),installed=installed)
                 persist()
+                print(json.dumps(dict(event='host_dependency_bootstrap',status='passed',
+                    commands=len(receipt['attempts']),packages=len(HOST_PACKAGES))),flush=True)
                 return receipt
             if attempt<attempts and until-time.monotonic()>3:
                 time.sleep(3)
@@ -142,6 +155,9 @@ def install_host_dependencies(root,deadline=450,attempts=3):
     except BaseException as error:
         receipt.update(passed=False,error=repr(error),completed=time.time())
         persist()
+        print(json.dumps(dict(event='host_dependency_bootstrap',status='failed',
+            commands=len(receipt['attempts']),exception_type=type(error).__name__,
+            error=str(error)[:1024])),flush=True)
         raise
 
 
