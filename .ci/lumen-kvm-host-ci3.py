@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import tempfile
 import time
@@ -32,7 +33,7 @@ HOST_PACKAGES=(
 )
 
 
-def install_host_dependencies(root,deadline=450,attempts=3):
+def install_host_dependencies(root,deadline=450,attempts=3,packages=HOST_PACKAGES):
     """Bounded official HTTPS apt bootstrap; never rewrites system mirrors/DNS.
 
     A separate signed source list and apt index/cache avoid stale or broken
@@ -40,6 +41,9 @@ def install_host_dependencies(root,deadline=450,attempts=3):
     before any SSH daemon, key or reverse tunnel is created.
     """
     root=Path(root)
+    packages=tuple(packages)
+    if not packages or any(not re.fullmatch(r'[a-z0-9][a-z0-9+.-]*',package) for package in packages):
+        raise RuntimeError('Invalid dependency package selection')
     root.mkdir(parents=True,exist_ok=True)
     keyring=Path('/usr/share/keyrings/ubuntu-archive-keyring.gpg')
     release={}
@@ -81,7 +85,7 @@ def install_host_dependencies(root,deadline=450,attempts=3):
     receipt=dict(schema='lumen-ci3-apt-bootstrap-v1',passed=False,
                  system_run_verified=False,apt_work=str(apt_work),
                  source=str(source),sources_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
-                 packages=list(HOST_PACKAGES),attempts=[],started=time.time())
+                 packages=list(packages),attempts=[],started=time.time())
     until=time.monotonic()+deadline
 
     def persist():
@@ -134,20 +138,20 @@ def install_host_dependencies(root,deadline=450,attempts=3):
             update=command(f'apt-update-{attempt}',
                            ['sudo','apt-get',*options,'update','-qq'],90)
             if update and command(f'apt-install-{attempt}',
-                    ['sudo','apt-get',*options,'install','-y','--no-install-recommends',*HOST_PACKAGES],120):
+                    ['sudo','apt-get',*options,'install','-y','--no-install-recommends',*packages],120):
                 if not command('dpkg-verify',['dpkg-query','-W',
-                        '-f=${binary:Package}\t${db:Status-Status}\t${Version}\n',*HOST_PACKAGES],20):
+                        '-f=${binary:Package}\t${db:Status-Status}\t${Version}\n',*packages],20):
                     raise RuntimeError('Dependency package query failed')
                 verify=root/'dpkg-verify.log'
                 installed={line.split('\t')[0].split(':')[0]:line.split('\t')[1]
                            for line in verify.read_text().splitlines()
                            if len(line.split('\t'))==3}
-                if any(installed.get(package)!='installed' for package in HOST_PACKAGES):
+                if any(installed.get(package)!='installed' for package in packages):
                     raise RuntimeError('Host dependency package remains uninstalled')
                 receipt.update(passed=True,completed=time.time(),installed=installed)
                 persist()
                 print(json.dumps(dict(event='host_dependency_bootstrap',status='passed',
-                    commands=len(receipt['attempts']),packages=len(HOST_PACKAGES))),flush=True)
+                    commands=len(receipt['attempts']),packages=len(packages))),flush=True)
                 return receipt
             if attempt<attempts and until-time.monotonic()>3:
                 time.sleep(3)
@@ -158,6 +162,57 @@ def install_host_dependencies(root,deadline=450,attempts=3):
         print(json.dumps(dict(event='host_dependency_bootstrap',status='failed',
             commands=len(receipt['attempts']),exception_type=type(error).__name__,
             error=str(error)[:1024])),flush=True)
+        raise
+
+
+def bootstrap_ssh(root,binary=Path('/usr/sbin/sshd')):
+    """Verify only the SSH service prerequisite, without emulator libraries."""
+    root=Path(root)
+    root.mkdir(parents=True,exist_ok=True)
+    binary=Path(binary)
+    receipt=dict(schema='lumen-ci3-ssh-bootstrap-v1',passed=False,
+                 system_run_verified=False,binary=str(binary),started=time.time(),
+                 provenance='Preinstalled SSH daemon on the GitHub Ubuntu 24.04 runner')
+
+    def persist():
+        path=root/'ssh-bootstrap.json'
+        path.write_text(json.dumps(receipt,indent=2)+'\n')
+        path.chmod(0o600)
+
+    try:
+        if not binary.exists() and not binary.is_symlink():
+            receipt['provenance']='Installed openssh-server by bounded official HTTPS Ubuntu fallback'
+            receipt['installation']=install_host_dependencies(root/'bootstrap',packages=('openssh-server',))
+        details=binary.lstat()
+        if not stat.S_ISREG(details.st_mode) or not os.access(binary,os.X_OK):
+            raise RuntimeError('SSH daemon must be a regular executable file')
+        receipt['binary_file']=dict(size=details.st_size,mode=stat.S_IMODE(details.st_mode))
+        with binary.open('rb') as stream:
+            receipt['binary_file']['sha256']=hashlib.file_digest(stream,'sha256').hexdigest()
+        version=subprocess.run([str(binary),'-V'],stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,timeout=20,check=False)
+        receipt['version']=dict(returncode=version.returncode,output=version.stdout[:2048])
+        if version.returncode!=0 or not re.match(r'^OpenSSH_\d+\.\d+(?:p\d+)?(?:\s|,|$)',version.stdout.strip()):
+            raise RuntimeError('SSH daemon version execution did not return OpenSSH with status 0')
+        try:
+            package=subprocess.run(['dpkg-query','-W','-f=${db:Status-Status}\t${Version}\n','openssh-server'],
+                stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,
+                text=True,timeout=10,check=False)
+            receipt['dpkg_query']=dict(available=True,returncode=package.returncode,
+                                       output=package.stdout[:1024])
+        except (OSError,subprocess.TimeoutExpired) as error:
+            receipt['dpkg_query']=dict(available=False,error_type=type(error).__name__)
+        receipt.update(passed=True,completed=time.time())
+        persist()
+        print(json.dumps(dict(event='ssh_bootstrap',status='passed',
+            provenance=receipt['provenance'],sha256=receipt['binary_file']['sha256'],
+            version=receipt['version']['output'].strip(),system_run_verified=False)),flush=True)
+        return receipt
+    except BaseException as error:
+        receipt.update(passed=False,error=str(error)[:1024],completed=time.time())
+        persist()
+        print(json.dumps(dict(event='ssh_bootstrap',status='failed',
+            exception_type=type(error).__name__,error=str(error)[:1024])),flush=True)
         raise
 
 
@@ -261,18 +316,21 @@ def main():
     if not Path('/dev/kvm').exists():
         raise RuntimeError('This CI host does not provide KVM')
     subprocess.run(['sudo','chmod','0666','/dev/kvm'],check=True)
-    install_host_dependencies(ROOT/'bootstrap')
-    sdk_roots=[Path(value) for key in ('ANDROID_HOME','ANDROID_SDK_ROOT')
-               if (value:=os.environ.get(key)) and (Path(value)/'emulator/emulator').is_file()]
-    if sdk_roots:
-        emulator_ldd_preflight(sdk_roots,ROOT/'emulator-dependencies.json')
-    else:
-        # Fresh official packages are downloaded later by the private runtime.
-        # Do not claim an ELF check before those bytes exist.
-        (ROOT/'emulator-dependencies.json').write_text(json.dumps(dict(
-            schema='lumen-ci-emulator-loader-v1',status='not_installed',passed=False,
-            system_run_verified=False,checks=[],
-            limitation='Run --preflight-only after the official emulator is installed.'),indent=2)+'\n')
+    try:
+        bootstrap_ssh(ROOT)
+    except BaseException as error:
+        # Also cover release/keyring/staging failures before an apt receipt
+        # exists; only the exception summary is emitted, never environment.
+        print(json.dumps(dict(event='host_dependency_failure',status='failed',
+            exception_type=type(error).__name__,error=str(error)[:1024])),flush=True)
+        raise
+    # The SSH/KVM bootstrap makes no claim about emulator dependencies. Private
+    # runtime libraries will be transferred, bound and actually loaded later.
+    pending=ROOT/'emulator-dependencies.json'
+    pending.write_text(json.dumps(dict(schema='lumen-ci-emulator-loader-v1',
+        status='user_libraries_pending',passed=False,system_run_verified=False,checks=[],
+        limitation='Private runtime libraries still require transfer, hash binding and actual loader validation.'),indent=2)+'\n')
+    pending.chmod(0o600)
     for name in ('runner-key','host-key'):
         subprocess.run(['ssh-keygen','-q','-t','ed25519','-N','','-f',str(ROOT/name)],check=True)
     (ROOT/'authorized_keys').write_text(os.environ['CLIENT_PUBLIC_KEY'].strip()+'\n')
